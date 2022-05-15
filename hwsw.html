@@ -254,10 +254,67 @@ assign a_out = (obstacle && K_c) ? K_c
                         <h3 class="section-subheading">PE Propagation</h3>
 
                         <p>
-                            The propagation module has nothing fancy. It is simply a matter of careful wiring to meet the rules of the HPP model. However, one thing to note is that our PEs will be sweeping from the left of the screen to the right side of the screen, and to generate the state of the current column (suppose column <code>N</code>), 
+                            The propagation module has nothing fancy. It is simply a matter of careful wiring to meet the rules of the HPP model. However, one thing to note is that our PEs will be sweeping from the left of the screen to the right side of the screen. To generate the state of the current column (suppose column <code>N</code>), the module needs information of the column that is to the right, and the column that is to the left of <code>N</code>, namely <code>N+1</code> and <code>N-1</code>. This is accomplished by having two states cached inside the propagation module like this.
+                        </p>
+
+                        <pre>
+                            <code>
+reg [9:0] prev_state;
+reg [9:0] prev_prev_state;
+
+always @(posedge clk) begin
+    if (!reset) begin
+        prev_state <= 10'd0;
+        prev_prev_state <= 10'd0;
+    end else begin
+        prev_state <= right_state;
+        prev_prev_state <= prev_state;
+    end
+end
+                            </code>
+                        </pre>
+
+                        <p>
+                            The input <code>right_state</code> comes directly from the M10K module. That is the <code>N+1</code> column. <code>prev_state</code> stores the state of column <code>N</code>, and <code>prev_prev_state</code> stores the state of column <code>N-1</code>. Note that <code>N</code> is the column that the propagation module is working on in this cycle, and the propagation module will generate the updated state of <code>N</code> by the end of this cycle, which will be written into the M10K module.
                         </p>
 
                         <h3 class="section-subheading">State Machine</h3>
+
+                        <p>
+                            Below is a diagram of the finite state machine transition. Upon <code>KEY[0]</code> is pressed, the FSM goes to the <code>RESET</code> state. It then enters the <code>INIT</code> states. Depending on the configuration of the first 3 switches, it enters different <code>INIT</code> states. <code>init_row_idx</code> and <code>current_column</code> are first set to <code>0</code>. 
+                        </p>
+
+                        <p>
+                            Let's call <code>INIT_WALL_ONLY</code>, <code>INIT_RAIL</code>, <code>INIT_SQ</code>, and <code>INIT_URAND</code> as init pattern states. These init pattern states use combinational logic to assign states to each cell during initialization. <code>init_row_idx</code> tracks the <code>y</code> coordinate of the grid the FSM is currently working on. <code>current_column</code> tracks the <code>x</code> coordinate.
+                        </p>
+
+                        <p>
+                            <code>init_row_idx</code> increments for every cycle it stays in one of the init pattern states. <code>current_column</code> increments when the FSM is at the <code>INIT_COMM</code> state. Essentially, the FSM transitions from one of the init pattern states of <code>INIT_COMM</code> when it finishes initializing a column, then <code>init_row_idx</code> is set back to 0, and the FSM transitions back to the init pattern state. This is a fundamental way of doing a 2-level nested loop in FSM. In <code>INIT_COMM</code> state, the <code>we</code> signals for all the PEs are set to high, and init values will be written into the FSMs.
+                        </p>
+
+                        <p>
+                            When the FSM is in <code>INIT_COMM</code> and <code>current_column == 639</code>, this means the FSM has done iterating over all the grids. It then transitions to <code>COLLISION_PREP</code>, and stays there for a cycle. <code>COLLISION_PREP</code> is simply a one-cycle padding state to accomondate the one cycle read delay of the <code>M10K</code> blocks.
+                        </p>
+
+                        <p>
+                            Then the FSM stays in <code>COLLISION_PROCEED</code> state for 640 cycles. In <code>COLLISION_PROCEED</code> state, the PEs are set to collision mode. The M10K read address would be <code>current_column + 1</code>.
+                        </p>
+
+                        <p>
+                            Then the FSM enters the two padding states for propagation. The reason why collision phase only needs 1 padding state while the propagation phase needs 2 is because the propagation state needs to read ahead and cache one more state, as discussed in the propagation module seciton. Then similar to <code>COLLISION_PROCEED</code>, <code>PROPAGATION_PROCEED</code> sets the PE modes into propagation module, and M10K read address would be <code>current_column + 2</code> instead of <code>current_column + 1</code> because of the extra padding state.
+                        </p>
+
+                        <p>
+                            After propagation is done, the FSM has finished rendering one frame of the image. It enters the <code>MOUSE_TRIGGER_SEL</code> state, which detects whether or not there is a press of mouse buttons. If there is and the user is not resizing the mouse pointer, then the FSM enters the <code>ACTION</code> state. Otherwise, it enters the <code>WAIT_VGA</code> state. 
+                        </p>
+
+                        <p>
+                            The combination of <code>ACTION</code> and <code>ACTION_COMM</code> is similar to that of init states and <code>INIT_COMM</code>. Instead of iterating over the whole screen, <code>ACTION</code> and <code>ACTION_COMM</code> only iterates and rewrites the area that is selected by the mouse. The area is specified by 4 values from HPS.
+                        </p>
+
+                        <p>
+                            After done overwriting the grid states, the FSM enters the <code>WAIT_VGA</code> state. In the <code>WAIT_VGA</code> state, the design responses to VGA's requests of grid info. M10K read address is now depending on what grid the VGA driver is requesting. When the VGA has left the active region, the <code>enter_v_front</code> signal will be asserted high, and the FSM will go back to <code>COLLISION_PREP</code> and begins rendering the next frame.
+                        </p>
 
                         <a href="#!"><img class="img-fluid" src="assets/img/project-fsm.png" width = 800 alt="..." /></a>
                         <span class="caption text-muted"> Finite state machine state transition </span>
@@ -266,19 +323,69 @@ assign a_out = (obstacle && K_c) ? K_c
 
                         <h3 class="section-subheading">Parallel I/O Ports</h3>
 
-                        <h3 class="section-subheading">Mouse Interactions</h3>
+                        <p>
+                            The software uses parallel input/output (PIO) ports to send information to the FPGA. There are 6 PIO signals:
+                            <ul class="list-unstyled">
+                                <ul>
+                                    <li>ptr_x_lo, ptr_x_hi, ptr_y_lo, ptr_y_hi: these signals specify a square of the mouse selected area.</li>
+                                    <li>
+                                        mouse_action: this signal specifies which mouse button is active
+                                    </li>
+                                    <li>
+                                        mouse_trigger: this signal is asserted high when any mouse button is being pressed
+                                    </li>
+                                </ul>
+                            </ul>
+                        </p>
+
+                        <h3 class="section-subheading">Mouse Input</h3>
+
+                        <p>
+                            Reading and parsing mouse input is straight-forward. We got a copy of the example code from <a href="https://people.ece.cornell.edu/land/courses/ece5760/DE1_SOC/HPS_peripherials/USB_index.html" class="link-primary">this website</a>. Changing the PIO signals given the mouse inputs is a trivial coding job.
+                        </p>
 
                         <h2 class="section-heading">Reference Code</h2>
 
                         <h3 class="section-subheading">Random Number Generation</h3>
 
+                        <p>We obtain and modify the random number generator from <a href="https://people.ece.cornell.edu/land/courses/ece5760/Chemical_Simulation/Two_reaction_per_step/VGA_320x240_chem_sim_2_MM_rand63bit.v" class="link-primary">here</a>. Bruce is the author. </p>
+
+                        <h3 class="section-subheading">USB Mouse</h3>
+
+                        <p>We obtain and modify the USB mouse parsing code from <a href="https://people.ece.cornell.edu/land/courses/ece5760/DE1_SOC/HPS_peripherials/USB_index.html" class="link-primary">here</a>. Bruce is the author.</p>
+
                         <h3 class="section-subheading">VGA Driver</h3>
+
+                        <p>
+                            We obtain the modify the VGA driver from <a href="https://vanhunteradams.com/DE1/VGA_Driver/Driver.html" class="link-primary">here</a>. Hunter is the author.
+                        </p>
 
                         <h3 class="section-subheading">Core Algorithm</h3>
 
+                        <p>
+                            We obtain the C copy of the core HPP algorithm from <a href="http://new.math.uiuc.edu/im2008/dakkak/implementation/implementation.html" class="link-primary">here</a>. The author is honestly unknown.
+                        </p>
+
+                        <h3 class="section-subheading">Other RTL design is made in house</h3>
 
                         <h2 class="section-heading">Things we thought about or tried but did not work</h2>
 
+                        <p>
+                            Here is a list of things that we have thought about or spent very little effort trying but did not work:
+                            <ul class="list-unstyled">
+                                <ul>
+                                    <li>
+                                        Use 480 M10K blocks (each PE responsible for 1 row). This allows easier implementation but we simply don't have enough M10K blocks available on the board.
+                                    </li>
+                                    <li>
+                                        Made particles visible to HPS. This will need very high bandwidth between the FPGA and the HPS. We have thought about it, but the methods we come up with will either slow down the framework or cause decoherency between the FPGA data and HPS's view.
+                                    </li>
+                                    <li>
+                                        Use HPS to send arbitrary overwriting pattern to the FPGA. We want to do this and we think this is doable, but we simply didn't have enough time...
+                                    </li>
+                                </ul>
+                            </ul>
+                        </p>
 
                     </div>
                 </div>
