@@ -61,42 +61,225 @@
                 <div class="row gx-4 gx-lg-5 justify-content-center">
                     <div class="col-md-10 col-lg-8 col-xl-7">
 
-                        
+                        <p>
+                            Here we will take a deep dive into our hardware and software design of the system. We will discuss our design considerations and then go through the modules used in RTL. Our software is fairly simple, so the emphasis of this section will be RTL. Our source code will be made available under MIT license. 
+                        </p>
 
-                        <h2 class="section-heading">HW details</h2>
+                        <p>
+                            The goal of this section is to provide enough detail such that an experienced RTL designer could replicate our design by reading this section. One would also need to understand how the HPP model works. It is impossible to put everything in our code into words. After all, if the source code is available, most engineers would prefer reading code instead of paragraphs. We will do our best here.
+                        </p>
 
-                        <h3 class="section-subheading">Design considerations and architecture</h3>
+                        <h2 class="section-heading">HW Details</h2>
 
-                        <h3 class="section-subheading">System level</h3>
+                        <h3 class="section-subheading">Design Requirements</h3>
 
-                        <h3 class="section-subheading">VGA driver</h3>
+                        <p>
+                            Here are some design specifications we came up with before start coding:
+                        </p>
 
-                        <h3 class="section-subheading">Top level</h3>
+                        <ul class="list-unstyled">
+                            <ul>
+                                <li>Each pixel on the 640 x 480 VGA display should represent a grid, containing up to 4 particles or being an obstacle.</li>
+                                <li>Particle movements should be smooth and synchronized. RTL has to finish calculations for all the grids in one frame.</li>
+                                <li>We are aiming for 60 frames per second.</li>
+                            </ul>
+                        </ul>
 
-                        <h3 class="section-subheading">PE level</h3>
+                        <h3 class="section-subheading">Design Considerations</h3>
 
-                        <h3 class="section-subheading">PE collision</h3>
+                        <h4 class="section-subsubheading">VGA Bandwidth</h4>
 
-                        <h3 class="section-subheading">PE propagation</h3>
+                        <p>
+                            Hunter mentioned <a href="https://vanhunteradams.com/DE1/Mandelbrot/Mandelbrot.html" class="link-primary">here</a> that there are three ways to send data into the VGA buffer for display (see picture below). In order to achieve 60 frames per second on a 640 x 480 VGA display, the third option (custom VGA driver) is the only option. We used <a href="https://vanhunteradams.com/DE1/VGA_Driver/Driver.html" class="link-primary">Hunter's code</a> with some modifications. 
+                        </p>
 
-                        <h2 class="section-heading">SW details</h2>
+                        <a href="#!"><img class="img-fluid" src="assets/img/vga-options.png" width = 800 alt="..." /></a>
+                        <span class="caption text-muted"> VGA display options </span>
 
-                        <h3 class="section-subheading">Parallel input/output ports</h3>
+                        <h4 class="section-subsubheading">Grid Representation</h4>
 
-                        <h3 class="section-subheading">Mouse interactions</h3>
+                        <p>
+                            Each grid could contain up to 4 particles. Particles in each of the four directions could be either present or not (2-bit information). In addition, we need 1 more bit to represent whether or not a grid is an obstacle. Therefore, we need 5 bits in total. Here is a picture showing what each bit represents.
+                        </p>
 
-                        <h2 class="section-heading">Reference code</h2>
+                        <a href="#!"><img class="img-fluid" src="assets/img/grid-representation.png" width = 600 alt="..." /></a>
+                        <span class="caption text-muted"> Bit representation of the state of a grid </span>
 
-                        <h3 class="section-subheading">Random number generation</h3>
+                        <h4 class="section-subsubheading">Parallel Computation</h4>
 
-                        <h3 class="section-subheading">VGA driver</h3>
+                        <p>
+                            Cellular automaton is embarrassingly parallel. Our parallel calculation scheme is to calculate the next state of one column of pixels (or grids) on the VGA screen in parallel. This way, we will achieve 480X speed up compared to calculating the grids one by one.
+                        </p>
 
-                        <h3 class="section-subheading">Core algorithm</h3>
+                        <p>
+                            We did not choose to do parallel in the horizontal direction (compute a row of grids in parallel) because we want to be conservative at first to potentially make synthesis easier on the FPGA. We also believe that this design is sufficient to meet our design requirement with some back-of-envelope calculations. Iterating over the whole screen should take ~640 cycles. Doubling this number to account for both collision and propagation would mean ~1300 cycles. This is a very short time when the design is running at 50 MHz.
+                        </p>
+
+                        <p>
+                            There are other cellular automaton schemes that has a grid-like design, and can achieve higher speedup. But we do want to keep the design simple to make sure we meet the project timeline.
+                        </p>
+
+                        <h4 class="section-subsubheading">Memory Limitation</h4>
+
+                        <p>
+                            Performing computation of the whole column together implies 480 parallel reads/writes. This is not feasible because there are only 390 M10K blocks, each having 1R1W dual port. Further investigation shows that these M10K blocks also has 10-bit X 1K configuration. Because computation of a column of grid is synchronized, this means we can store the states of two grids together in one M10K address. Each M10K block will store the state of two rows on the VGA screen, and each will store 640 unit of "two grids' state." Perfect.
+                        </p>
+
+                        <h4 class="section-subsubheading">M10K Read Share & Timing Requirements</h4>
+
+                        <p>
+                            But here is another issue. When the model is performing computation, it will be reading and writing to the M10K blocks. However, the VGA driver will also be sending requests into the M10K blocks for the grid information in position <code>(x,y)</code>. There may be a smart way to arbiter between VGA driver requests and model evolution, but we found a more straight-forward solution. 
+                        </p>
+
+                        <p>
+                            A diagram of the VGA standard is shown below. The VGA driver scans by row. It iterates over one row, and moves to another. Within the active region, the VGA driver sends out <code>next_x</code> and <code>next_y</code> signals trying to get the color for that pixel. However, we can see that the VGA driver is inactive in the bottom 45 lines. If we multiply that number by 800 clock cycles for a row, then there is 36000 cycles at 25 MHz (VGA driver clk freq), which is 72000 cycles at 50 MHz. If our RTL can finish rendering a frame within 72000 cycles, then we can avoid data racing and achieve frame synchronization at the same time. 
+                        </p>
+
+                        <p>
+                            This is what we do, and this is why there is this <code>enter_v_front</code> signal from the VGA driver to our top level design, which will be asserted for 2 cycles when <code>VSYNC</code> enters <code>front porch</code>.
+                        </p>
+
+                        <p>
+                            Remember, with our design, rendering a frame will only take ~1300 cycles, that is 1.8% of 72000 cycles. This still leaves a lot of room for extra states for HPS interactions where overwriting grid information is needed.
+                        </p>
+
+                        <a href="#!"><img class="img-fluid" src="assets/img/vga-timing.png" width = 800 alt="..." /></a>
+                        <span class="caption text-muted"> VGA standard (got it from Hunter's page) </span>
+
+                        <h3 class="section-subheading">System Level</h3>
+
+                        <p>
+                            The whole computer system contains both the ARM and our custom RTL design. The ARM (or HPS, whatever you like to call it) uses parallel i/o ports to transmit mouse signals to the RTL design. There is the modified version of Hunter's VGA driver. The VGA driver sends out requests when it is in the active region into the top level design, and the top level design sends back the grid state. The VGA driver module will map the grid's state into 8-bit RGB color. There is this <code>proceed</code> signal (or <code>enter_v_front</code> in the actual code) sent from the VGA driver to the top level design. This signal is assert high when the VGA driver enters the verticle front porch, meaning that the top level design can now use the read ports of the M10K blocks. The top level design is responsible for updating the grids' states. There is also the SoC VGA module, which is controlled by the custom VGA driver.
+                        </p>
+
+                        <a href="#!"><img class="img-fluid" src="assets/img/system-level-block.png" width = 800 alt="..." /></a>
+                        <span class="caption text-muted"> System level block diagram </span>
+
+                        <h3 class="section-subheading">VGA Driver</h3>
+
+                        <p>
+                            As mentioned before, the VGA driver is modified from <a href="https://vanhunteradams.com/DE1/VGA_Driver/Driver.html" class="link-primary">Hunter's VGA driver</a>. We added the <code>enter_v_front</code> signal. We added the color mapping for the grids' states, and we added the square that shows where the mouse pointer is at. The code snippet below should help.
+                        </p>
+
+                        <pre>
+                            <code>
+wire [2:0] num_particles;
+assign num_particles = grid_info[0] + grid_info[1] + grid_info[2] + grid_info[3];
+
+wire [23:0] color_in;
+assign color_in = (((next_x == ptr_x_lo || next_x == ptr_x_hi) && (next_y >= ptr_y_lo && next_y <= ptr_y_hi)) || ((next_y == ptr_y_lo || next_y == ptr_y_hi) && (next_x >= ptr_x_lo && next_x <= ptr_x_hi))) ? {8'd0, 8'd255, 8'd0}
+                : (grid_info[4] == 1'b1)  ? {8'd255, 8'd168, 8'd54}
+                : (num_particles == 3'd0) ? {8'd2, 8'd30, 8'd30} // no particle/background
+                : (num_particles == 3'd1) ? {8'd34, 8'd148, 8'd145} // 1 particle
+                : (num_particles == 3'd2) ? {8'd62, 8'd178, 8'd168} // 2 particles
+                : (num_particles == 3'd3) ? {8'd116, 8'd230, 8'd217} // 3 particles
+                : (num_particles == 3'd4) ? {8'd195, 8'd255, 8'd248}   // 4 particles
+                : 24'd0;
+                            </code>
+                        </pre>
+
+                        <h3 class="section-subheading">Top Level</h3>
+
+                        <p>
+                            The top level design contains everything needed to run the cellular automaton. There is this carefully designed control finite state machine. The state machine orchestrates all the multiplexing of signals, and it calculates M10K addresses that are used by the processing elements (PEs). All the external config signals go into the FSM. The <code>enter_v_front/proceed</code> signal also goes into the FSM.
+                        </p>
+
+                        <p>
+                            There is a random number generator (a linear feedback shift register we got from Bruce's old code) and some glue logic, but all the PEs are doing the heavy-liftings. Each PE is responsible for calculating two vertical neighboring grids. That is 240 PEs in total. These PE are also connected into a row. The reason is that each grid needs information from its four neighboring grids in the propagation phase.  
+                        </p>
+
+                        <a href="#!"><img class="img-fluid" src="assets/img/top-block.png" width = 800 alt="..." /></a>
+                        <span class="caption text-muted"> Top level block diagram </span>
+
+                        <h3 class="section-subheading">PE Level</h3>
+
+                        <p>
+                            Below is the block diagram of a PE. A PE contains two collision modules. Collision only takes the current state as an input, and it calculates the next state within a cycle. Collision is resolved only by the current state, it is not affected by neighbording cells. Each collision module is responsible for the calculation of one grid. The collision module also has an artist mode. What it does is to let obstacles generate new particles. Activation of the artist mode would create unexpected beautiful effects.
+                        </p>
+
+                        <p>
+                            There is one propagation module. The propagation module is responsible for the propagation phase. Each propagation module is responsible for the calculation of two grids. Because the calculation of propagation needs information from neighboring grids, it takes <code>ain, cin</code> from adjacent cells, and generates <code>aout, cout</code>. This is also combinational logic.
+                        </p>
+
+                        <p>
+                            There is this M10K block that is responsible for storing all the states in the two grids that this PE is responsible for. <code>we, read_addr, write_addr</code> are controlled by the FSM. <code>read_val</code> is wired to <code>vga_grid_info</code> (response to VGA requests for grid info), collision modules, and the propagation module. There is a mode input (controlled by FSM) that decides what should be written back to the M10K module. 
+                        </p>
+
+                        <p>
+                            The PE has four modes:
+                        </p>
+
+                        <ul class="list-unstyled">
+                            <ul>
+                                <li>Collision mode: outputs from the collision modules are wired to M10K <code>write_val</code>.</li>
+                                <li>Propagation mode: outputs from the propagation modules are wired to M10K <code>write_val</code>.</li>
+                                <li>Init/Mouse Overwriting mode: input <code>init_val</code> from the FSM are wired to M10K <code>write_val</code>. This allows the FSM to overwrite information in the M10K.</li>
+                                <li>VGA read mode: In this mode, <code>we</code> of the M10K block is disabled. <code>read_addr</code> is set by the FSM, and the signal <code>pe_select</code> chooses whether the upper grid or the lower grid is wired out.</li>
+                            </ul>
+                        </ul>
+
+                        <a href="#!"><img class="img-fluid" src="assets/img/pe.png" width = 800 alt="..." /></a>
+                        <span class="caption text-muted"> PE level block diagram </span>
+
+                        <h3 class="section-subheading">PE Collision</h3>
+
+                        <p>
+                            We got the very efficient collision algorithm from <a href="http://new.math.uiuc.edu/im2008/dakkak/implementation/implementation.html" class="link-primary">this website</a>. We modified the algorithm to fit into Verilog (originally in C). The code snippet below should explain everything.
+                        </p>
+
+                        <pre>
+                            <code>
+assign change = (a_top & c_bottom & ~(b_left | d_right)) | (b_left & d_right & ~(a_top | c_bottom));
+
+wire K_a, K_b, K_c, K_d; // temp vars
+assign K_a = a_top ^ change;
+assign K_b = b_left ^ change;
+assign K_c = c_bottom ^ change;
+assign K_d = d_right ^ change;
+                            </code>
+                        </pre>
+
+                        <p>
+                            Because a grid could be an obstacle, we need the logic to resolve obstacles as well. The code snippet below should make sense.
+                        </p>
+
+                        <pre>
+                            <code>
+assign a_out = (obstacle && K_c) ? K_c 
+: (obstacle && K_a && ~artist_mode) ? 1'b0 
+: K_a;
+                            </code>
+                        </pre>
+
+                        <h3 class="section-subheading">PE Propagation</h3>
+
+                        <p>
+                            The propagation module has nothing fancy. It is simply a matter of careful wiring to meet the rules of the HPP model. However, one thing to note is that our PEs will be sweeping from the left of the screen to the right side of the screen, and to generate the state of the current column (suppose column <code>N</code>), 
+                        </p>
+
+                        <h3 class="section-subheading">State Machine</h3>
+
+                        <a href="#!"><img class="img-fluid" src="assets/img/project-fsm.png" width = 800 alt="..." /></a>
+                        <span class="caption text-muted"> Finite state machine state transition </span>
+
+                        <h2 class="section-heading">SW Details</h2>
+
+                        <h3 class="section-subheading">Parallel I/O Ports</h3>
+
+                        <h3 class="section-subheading">Mouse Interactions</h3>
+
+                        <h2 class="section-heading">Reference Code</h2>
+
+                        <h3 class="section-subheading">Random Number Generation</h3>
+
+                        <h3 class="section-subheading">VGA Driver</h3>
+
+                        <h3 class="section-subheading">Core Algorithm</h3>
 
 
-                        <h2 class="section-heading">Things we thought about or tried by did not work</h2>
+                        <h2 class="section-heading">Things we thought about or tried but did not work</h2>
 
-                        
+
                     </div>
                 </div>
             </div>
