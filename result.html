@@ -99,17 +99,21 @@
                         <a href="#!"><img class="img-fluid" src="assets/img/chip-planner-1.png" width = 800 alt="..." /></a>
                         <span class="caption text-muted"> Chip planner diagram </span>
 
-                        <h3 class="section-subheading">Power Efficiency</h3> <!-- Owen -->
+                        <h3 class="section-subheading">Energy Efficiency</h3> <!-- Owen -->
 
                         <p>
-                            
+                            We used Quartus PowerPlay to estimate power consumption of this design. The screenshot below is showing 1.6 W of power consumption for HPS and FPGA combined, with the HPS running at 100 MHz and IO toggle rate at 0.5 transitions/s. This is an aggressive estimation, meaning the actual power consumption will likely be lower. 
                         </p>
 
                         <a href="#!"><img class="img-fluid" src="assets/img/power-analysis.png" width = 800 alt="..." /></a>
                         <span class="caption text-muted"> Power analysis. Assuming HPS at 100 MHz, and IO toggle rate at 0.5 transitions/s. This is an aggressive estimation. </span>
 
+                        <p>
+                            We want to compare energy efficiency between our design and an expensive laptop SoC we have lying around. Analysis from Anandtech (picture below) shows ~10W of power consumption when running single-thread benchmarks. Our design uses 16% of the power while being ~10X faster (speed comparison measured with a C program compiled with <code>-Ofast</code> without graphics rendering). We would like to argue this is an impressive result.
+                        </p>
+
                         <a href="#!"><img class="img-fluid" src="assets/img/m1-power.png" width = 800 alt="..." /></a>
-                        <span class="caption text-muted"> M1 Max consumes ~10W when running single thread. </span>
+                        <span class="caption text-muted"> M1 Max consumes ~10W when running single thread. (Picture from Anandtech)</span>
 
                         <h2 class="section-heading">Conclusion</h2>
 
