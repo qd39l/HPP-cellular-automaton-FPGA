@@ -66,9 +66,9 @@
 
                         <h2 class="section-heading">Results</h2>
 
-                        <h3 class="section-subheading">User interaction</h3> <!-- Kunpeng -->
+                        <h3 class="section-subheading">User Interaction</h3> <!-- Kunpeng -->
                         <p>
-                            As user interactivity is a core component of our project, we want the interaction experience to be as intuitive and seamless as possible. We used a combination of toggle switches, buttons, and mouse for user inputs.
+                            As user interactivity is a core component of our project, we want the interaction experience to be as intuitive and seamless as possible. We used a combination of toggle switches, buttons, and mouse for user inputs. The user interface has been tested extensively through visual inspections by our team members. The usability has been confirmed by the course instructors as well as members from other teams.
                         </p>
                         <center><a href="#!"><img class="img-fluid" src="assets/img/HPP_UI.png" width = 800 alt="..." /></a></center>
                         <span class="caption text-muted"> User input devices </span>
@@ -76,12 +76,31 @@
                         <p>The function mapped to each input is listed below along with the timestamp demonstrating it in the video above.</p>
                         <ul class="list-unstyled">
                             <ul>
-                                <li><code>SW0</code>: initialization mode - random particles. [0:0]</li>
-                                <li><code>SW1</code>: initialization mode - railgun beam through slit. [0:14]</li>
-                                <li><code>SW2</code>: initialization mode - particles at center. [0:33]</li>
-                                <li><code>SW3</code>: initialization mode - particles at center. [0:33]</li>
+                                <li><code>SW0</code>: initialization mode - random particles [0:0]</li>
+                                <li><code>SW1</code>: initialization mode - railgun beam through slit [0:14]</li>
+                                <li><code>SW2</code>: initialization mode - particles at center [0:33]</li>
+                                <li><code>SW3</code>: direction of particle generation - right [0:52]</li>
+                                <li><code>SW4</code>: direction of particle generation - left [1:01]</li>
+                                <li><code>SW5</code>: direction of particle generation - up [1:27]</li>
+                                <li><code>SW6</code>: direction of particle generation - down [1:36]</li>
+                                <li><code>SW7</code>: direction of particle generation - three sides [1:42]</li>
+                                <li><code>SW8</code>: direction of particle generation - two sides </li>
+                                <li><code>SW9</code>: direction of particle generation - four sides [1:39]</li>
+                                <li><code>KEY0</code>: system reset</li>
+                                <li><code>KEY1</code>: pause animation [5:00]</li>
+                                <li><code>KEY2</code>: artist mode [4:55]</li>
+                                <li><code>KEY3</code>: enable resize mouse cursor; middle mouse button - increase size [3:37]; right mouse button - decrease size [3:06]</li>
+                                <li><code>Mouse-left</code>: add particles [3:41]</li>
+                                <li><code>Mouse-middle</code>: add obstacles [3:12]</li>
+                                <li><code>Mouse-right</code>: clear particles and obstacles [4:27]</li>
                             </ul>
                         </ul>
+
+                        <h3 class="section-subheading">Rendering Quality</h3>
+
+                        <p>
+                            Our system is able to maintain the 60Hz frame rate with no visible pause or flicker in all situations, regardless of the number of particles currently on screen and whether there's an active user input. When sufficient particles are added to the grid, the simulation behaves as propagating waves instead of individual moving particles. In addition, we observed that regardless of the initial conditions, after a sufficiently long time, the particles defused into a uniform distribution.
+                        </p>
 
                         <h3 class="section-subheading">FPGA Resource Utilization</h3> <!-- Owen -->
 
@@ -89,14 +108,14 @@
                             The flow summary report after hardware compilation shows resource utilization on the FPGA for this particular design. The picture below is a screenshot of the summary. Our design uses 32% of logic fabrics, 38% block memory, and 0% DSPs. An naive estimation would show that the resources on board could probably support rendering in 1080p @ 60Hz as well (with slight modifications). 
                         </p>
 
-                        <a href="#!"><img class="img-fluid" src="assets/img/flow-summary.png" width = 800 alt="..." /></a>
+                        <center><a href="#!"><img class="img-fluid" src="assets/img/flow-summary.png" width = 500 alt="..." /></a></center>
                         <span class="caption text-muted"> Resource utilization </span>
 
                         <p>
                             The chip planner diagram below agrees with the flow summary report.
                         </p>
 
-                        <a href="#!"><img class="img-fluid" src="assets/img/chip-planner-1.png" width = 800 alt="..." /></a>
+                        <center><a href="#!"><img class="img-fluid" src="assets/img/chip-planner-1.png" width = 400 alt="..." /></a></center>
                         <span class="caption text-muted"> Chip planner diagram </span>
 
                         <h3 class="section-subheading">Energy Efficiency</h3> <!-- Owen -->
@@ -105,14 +124,14 @@
                             We used Quartus PowerPlay to estimate power consumption of this design. The screenshot below is showing 1.6 W of power consumption for HPS and FPGA combined, with the HPS running at 100 MHz and IO toggle rate at 0.5 transitions/s. This is an aggressive estimation, meaning the actual power consumption will likely be lower. 
                         </p>
 
-                        <a href="#!"><img class="img-fluid" src="assets/img/power-analysis.png" width = 800 alt="..." /></a>
+                        <center><a href="#!"><img class="img-fluid" src="assets/img/power-analysis.png" width = 500 alt="..." /></a></center>
                         <span class="caption text-muted"> Power analysis. Assuming HPS at 100 MHz, and IO toggle rate at 0.5 transitions/s. This is an aggressive estimation. </span>
 
                         <p>
                             We want to compare energy efficiency between our design and an expensive laptop SoC we have lying around. Analysis from Anandtech (picture below) shows ~10W of power consumption when running single-thread benchmarks. Our design uses 16% of the power while being ~10X faster (speed comparison measured with a C program compiled with <code>-Ofast</code> without graphics rendering). We would like to argue this is an impressive result.
                         </p>
 
-                        <a href="#!"><img class="img-fluid" src="assets/img/m1-power.png" width = 800 alt="..." /></a>
+                        <center><a href="#!"><img class="img-fluid" src="assets/img/m1-power.png" width = 500 alt="..." /></a></center>
                         <span class="caption text-muted"> M1 Max consumes ~10W when running single thread. (Picture from Anandtech)</span>
 
                         <h2 class="section-heading">Conclusion</h2>
