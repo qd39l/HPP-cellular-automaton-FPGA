@@ -61,7 +61,35 @@
             <div class="container px-0 px-lg-0">
                 <div class="row gx-4 gx-lg-5 justify-content-center">
                     <div class="col-md-10 col-lg-8 col-xl-7">
-                        <p>WIP</p>
+                        
+                        <h3 class="section-subheading">HPP Model</h3>
+
+                        <p>The HPP model is a form of cellular automaton. It is “a collection of colored cells on a grid of specified shape that evolves through a number of discrete time steps according to a set of rules based on the states of neighboring cells.” (from <a href="https://mathworld.wolfram.com/CellularAutomaton.html" class="link-primary">Wolfram MathWorld</a>) The system will keep evolving indefinitely because energy never travels out of the system, unless the boundary conditions are set to allow this. In our implementation, we modeled the system on a two-dimensional square grid, with particles capable of moving to any of the four adjacent grid points sharing a common edge but not diagonally.</p>
+
+                        <h3 class="section-subheading">Mathematical Background</h3>
+
+                        <p>In the HPP model, each particle has an associated direction and each lattice grid cell can only contain a maximum of one particle for each of the four directions. Therefore, the particles in a grid cell can be modeled by the 16 states below.</p>
+                        <center><a href="#!"><img class="img-fluid" src="assets/img/HPP_model_state.png" width = 300 alt="..." /></a></center>
+                        <span class="caption text-muted"> 16 possible states for particles in a grid cell (<a href="https://dl.acm.org/doi/10.1145/1462586.1462592" class="link-primary">Source</a>)</span>
+                        
+                        <p>The following rules govern the movements of the particles and the collisions between them: (Source <a href="https://en.wikipedia.org/wiki/HPP_model" class="link-primary">Wikipedia</a>)</p>
+
+                        <ul class="list-unstyled">
+                            <ul>
+                                <li>A single particle moves in a fixed direction until it experiences a collision.</li>
+                                <li>Two particles experiencing a head-on collision are deflected perpendicularly.</li>
+                                <li>Two particles experience a collision which isn't head-on pass through each other and continue in the same direction.</li>
+                                <li>A particle rebounds when it collides with the edges of a lattice or an obstacle.</li>
+                            </ul>
+                        </ul>
+
+                        <center><a href="#!"><img class="img-fluid" src="assets/img/HPP_model_collision.jpg" width = 400 alt="..." /></a></center>
+                        <span class="caption text-muted"> Four rules governing the movements of particles in HPP model.</span>
+
+                        <h3 class="section-subheading">Overall Design Strategy</h3>
+
+                        <p>The specifications of HPP model lends itself extremely well to parallelization. The states of the grid cells are mostly independent from each other, and the evolution of a grid cell only depends on the state of itself and the four adjacent cells at the previous timestep. While parallelizing all the cells on the scale of a VGA screen would require too much hardware resources, a combination of parallelization through hardware-implemented processing elements in one dimension (e.g., y or vertical) and serialization through memory sharing in the other would be an intuitive approach.</p>
+
                     </div>
                 </div>
             </div>
