@@ -63,11 +63,29 @@
                     <div class="col-md-10 col-lg-8 col-xl-7">
                         <h2 class="section-heading">Results</h2>
 
+
+
+                        <h3 class="section-subheading">FPGA Resource Utilization</h3> <!-- Owen -->
+
+                        <p>
+                            The flow summary report after hardware compilation shows resource utilization on the FPGA for this particular design. The picture below is a screenshot of the summary. Our design uses 32% of logic fabrics, 38% block memory, and 0% DSPs. An naive estimation would show that the resources on board could probably support rendering in 1080p @ 60Hz as well (with slight modifications). 
+                        </p>
+
                         <a href="#!"><img class="img-fluid" src="assets/img/flow-summary.png" width = 800 alt="..." /></a>
                         <span class="caption text-muted"> Resource utilization </span>
 
+                        <p>
+                            The chip planner diagram below agrees with the flow summary report.
+                        </p>
+
                         <a href="#!"><img class="img-fluid" src="assets/img/chip-planner-1.png" width = 800 alt="..." /></a>
                         <span class="caption text-muted"> Chip planner diagram </span>
+
+                        <h3 class="section-subheading">Power Efficiency</h3> <!-- Owen -->
+
+                        <p>
+                            
+                        </p>
 
                         <a href="#!"><img class="img-fluid" src="assets/img/power-analysis.png" width = 800 alt="..." /></a>
                         <span class="caption text-muted"> Power analysis. Assuming HPS at 100 MHz, and IO toggle rate at 0.5 transitions/s. This is an aggressive estimation. </span>
